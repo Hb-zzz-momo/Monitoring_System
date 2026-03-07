@@ -1,9 +1,11 @@
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../components/common_widgets.dart';
 import '../services/api_service.dart';
 import '../routes/app_routes.dart';
+import '../routes/route_args.dart';
 
 class AlarmDetailScreen extends StatefulWidget {
   final String alarmId;
@@ -33,7 +35,8 @@ class _AlarmDetailScreenState extends State<AlarmDetailScreen> {
         _alarm = alarm;
         _state = PageState.content;
       });
-    } catch (_) {
+    } catch (e) {
+      debugPrint('AlarmDetailScreen._loadAlarm error: $e');
       if (!mounted) return;
       setState(() => _state = PageState.error);
     }
@@ -47,7 +50,8 @@ class _AlarmDetailScreenState extends State<AlarmDetailScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('已标记为已处理')),
       );
-    } catch (_) {
+    } catch (e) {
+      debugPrint('AlarmDetailScreen._markProcessed error: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('更新失败，请稍后重试')),
@@ -62,11 +66,12 @@ class _AlarmDetailScreenState extends State<AlarmDetailScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('工单已创建: ${workOrder['id']}')),
       );
-        Navigator.of(context).pushNamed(
-          AppRoutes.workOrderDetail,
-          arguments: WorkOrderDetailArgs(orderId: workOrder['id'].toString()),
-        );
-    } catch (_) {
+      Navigator.of(context).pushNamed(
+        AppRoutes.workOrderDetail,
+        arguments: WorkOrderDetailArgs(orderId: workOrder['id'].toString()),
+      );
+    } catch (e) {
+      debugPrint('AlarmDetailScreen._createWorkOrder error: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('生成工单失败，请稍后重试')),
@@ -143,14 +148,14 @@ class _AlarmDetailScreenState extends State<AlarmDetailScreen> {
                             ],
                           ),
                           const SizedBox(height: 16),
-                          _buildInfoRow('设备', alarm['device']),
+                          _buildInfoRow('设备', alarm['device']?.toString() ?? '-'),
                           const SizedBox(height: 8),
-                          _buildInfoRow('部件', alarm['component']),
+                          _buildInfoRow('部件', alarm['component']?.toString() ?? '-'),
                           const SizedBox(height: 8),
-                          _buildInfoRow('触发时间', alarm['time']),
+                          _buildInfoRow('触发时间', alarm['time']?.toString() ?? '-'),
                           const SizedBox(height: 8),
                           _buildInfoRow('当前值',
-                              '${alarm['currentValue']} (阈值: ${alarm['threshold']})'),
+                              '${alarm['currentValue'] ?? '-'} (阈值: ${alarm['threshold'] ?? '-'})'),
                         ],
                       ),
                     ),
@@ -221,8 +226,8 @@ class _AlarmDetailScreenState extends State<AlarmDetailScreen> {
                                   child: CustomPaint(
                                     size: const Size(double.infinity, double.infinity),
                                     painter: _AlarmChartPainter(
-                                      alarmValue: (alarm['currentValue'] as num).toDouble(),
-                                      threshold: (alarm['threshold'] as num).toDouble(),
+                                      alarmValue: (alarm['currentValue'] as num?)?.toDouble() ?? 0.0,
+                                      threshold: (alarm['threshold'] as num?)?.toDouble() ?? 0.0,
                                     ),
                                   ),
                                 ),

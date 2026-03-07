@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../components/common_widgets.dart';
@@ -32,7 +33,8 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
         _devices = devices;
         _state = devices.isEmpty ? PageState.empty : PageState.content;
       });
-    } catch (_) {
+    } catch (e) {
+      debugPrint('DeviceListScreen._loadData error: $e');
       if (!mounted) return;
       setState(() => _state = PageState.error);
     }
@@ -130,8 +132,16 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
         ),
         title: const Text('设备'),
         actions: [
-          IconButton(icon: const Icon(Icons.search), onPressed: () {}),
-          IconButton(icon: const Icon(Icons.filter_list), onPressed: () {}),
+          IconButton(
+            icon: const Icon(Icons.search),
+            // TODO(P2): 实现设备搜索功能
+            onPressed: () {},
+          ),
+          IconButton(
+            icon: const Icon(Icons.filter_list),
+            // TODO(P2): 实现高级筛选弹窗
+            onPressed: () {},
+          ),
         ],
       ),
       body: StateWidget(
