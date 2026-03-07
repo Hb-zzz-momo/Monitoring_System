@@ -6,6 +6,7 @@ import '../components/common_widgets.dart';
 import '../services/api_service.dart';
 import '../routes/app_routes.dart';
 import '../routes/route_args.dart';
+import '../models/alarm_model.dart';
 
 class AlarmDetailScreen extends StatefulWidget {
   final String alarmId;
@@ -18,7 +19,7 @@ class AlarmDetailScreen extends StatefulWidget {
 
 class _AlarmDetailScreenState extends State<AlarmDetailScreen> {
   PageState _state = PageState.loading;
-  Map<String, dynamic>? _alarm;
+  AlarmModel? _alarm;
 
   @override
   void initState() {
@@ -29,10 +30,10 @@ class _AlarmDetailScreenState extends State<AlarmDetailScreen> {
   Future<void> _loadAlarm() async {
     setState(() => _state = PageState.loading);
     try {
-      final alarm = await fetchAlarm(widget.alarmId);
+      final raw = await fetchAlarm(widget.alarmId);
       if (!mounted) return;
       setState(() {
-        _alarm = alarm;
+        _alarm = AlarmModel.fromJson(raw);
         _state = PageState.content;
       });
     } catch (e) {
@@ -63,13 +64,16 @@ class _AlarmDetailScreenState extends State<AlarmDetailScreen> {
     try {
       final workOrder = await createWorkOrderFromAlarm(widget.alarmId);
       if (!mounted) return;
+      final newOrderId = workOrder['id']?.toString() ?? '';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('工单已创建: ${workOrder['id']}')),
+        SnackBar(content: Text('工单已创建: $newOrderId')),
       );
-      Navigator.of(context).pushNamed(
-        AppRoutes.workOrderDetail,
-        arguments: WorkOrderDetailArgs(orderId: workOrder['id'].toString()),
-      );
+      if (newOrderId.isNotEmpty) {
+        Navigator.of(context).pushNamed(
+          AppRoutes.workOrderDetail,
+          arguments: WorkOrderDetailArgs(orderId: newOrderId),
+        );
+      }
     } catch (e) {
       debugPrint('AlarmDetailScreen._createWorkOrder error: $e');
       if (!mounted) return;
@@ -78,6 +82,9 @@ class _AlarmDetailScreenState extends State<AlarmDetailScreen> {
       );
     }
   }
+
+  /// Returns [value] if non-empty, otherwise '-'.
+  static String _orDash(String value) => value.isEmpty ? '-' : value;
 
   @override
   Widget build(BuildContext context) {
@@ -92,8 +99,7 @@ class _AlarmDetailScreenState extends State<AlarmDetailScreen> {
       );
     }
 
-    final color =
-        alarm['level'] == 'danger' ? AppColors.danger : AppColors.warning;
+    final color = alarm.isDanger ? AppColors.danger : AppColors.warning;
 
     return Scaffold(
       appBar: AppBar(
@@ -118,7 +124,7 @@ class _AlarmDetailScreenState extends State<AlarmDetailScreen> {
                             children: [
                               Expanded(
                                 child: Text(
-                                  alarm['title'],
+                                  alarm.title,
                                   style: const TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
@@ -135,9 +141,7 @@ class _AlarmDetailScreenState extends State<AlarmDetailScreen> {
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
-                                  alarm['level'] == 'danger'
-                                      ? '告警'
-                                      : '预警',
+                                  alarm.isDanger ? '告警' : '预警',
                                   style: TextStyle(
                                     fontSize: 12,
                                     color: color,
@@ -148,14 +152,14 @@ class _AlarmDetailScreenState extends State<AlarmDetailScreen> {
                             ],
                           ),
                           const SizedBox(height: 16),
-                          _buildInfoRow('设备', alarm['device']?.toString() ?? '-'),
+                          _buildInfoRow('设备', _orDash(alarm.device)),
                           const SizedBox(height: 8),
-                          _buildInfoRow('部件', alarm['component']?.toString() ?? '-'),
+                          _buildInfoRow('部件', _orDash(alarm.component)),
                           const SizedBox(height: 8),
-                          _buildInfoRow('触发时间', alarm['time']?.toString() ?? '-'),
+                          _buildInfoRow('触发时间', _orDash(alarm.time)),
                           const SizedBox(height: 8),
                           _buildInfoRow('当前值',
-                              '${alarm['currentValue'] ?? '-'} (阈值: ${alarm['threshold'] ?? '-'})'),
+                              '${alarm.currentValue} (阈值: ${alarm.threshold})'),
                         ],
                       ),
                     ),
@@ -225,9 +229,9 @@ class _AlarmDetailScreenState extends State<AlarmDetailScreen> {
                                 Expanded(
                                   child: CustomPaint(
                                     size: const Size(double.infinity, double.infinity),
-                                    painter: _AlarmChartPainter(
-                                      alarmValue: (alarm['currentValue'] as num?)?.toDouble() ?? 0.0,
-                                      threshold: (alarm['threshold'] as num?)?.toDouble() ?? 0.0,
+                                painter: _AlarmChartPainter(
+                                      alarmValue: alarm.currentValue,
+                                      threshold: alarm.threshold,
                                     ),
                                   ),
                                 ),

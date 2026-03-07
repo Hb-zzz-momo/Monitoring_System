@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../components/common_widgets.dart';
 import '../services/api_service.dart';
+import '../models/work_order_model.dart';
 
 class WorkOrderDetailScreen extends StatefulWidget {
   final String orderId;
@@ -15,7 +16,7 @@ class WorkOrderDetailScreen extends StatefulWidget {
 
 class _WorkOrderDetailScreenState extends State<WorkOrderDetailScreen> {
   PageState _state = PageState.loading;
-  Map<String, dynamic>? _workOrder;
+  WorkOrderModel? _workOrder;
   final List<Map<String, dynamic>> _checklistItems =
       List.from([
     {'title': '检查轴承温度', 'description': '使用红外测温仪测量', 'checked': true},
@@ -41,10 +42,10 @@ class _WorkOrderDetailScreenState extends State<WorkOrderDetailScreen> {
   Future<void> _loadWorkOrder() async {
     setState(() => _state = PageState.loading);
     try {
-      final workOrder = await fetchWorkOrder(widget.orderId);
+      final raw = await fetchWorkOrder(widget.orderId);
       if (!mounted) return;
       setState(() {
-        _workOrder = workOrder;
+        _workOrder = WorkOrderModel.fromJson(raw);
         _state = PageState.content;
       });
     } catch (e) {
@@ -55,11 +56,11 @@ class _WorkOrderDetailScreenState extends State<WorkOrderDetailScreen> {
   }
 
   Future<void> _moveNextStep() async {
-    if (_workOrder == null) return;
-    final currentStatus = _workOrder!['status']?.toString() ?? '待处理';
-    final nextStatus = currentStatus == '待处理'
+    final current = _workOrder;
+    if (current == null) return;
+    final nextStatus = current.isPending
         ? '处理中'
-        : (currentStatus == '处理中' ? '已完成' : '已完成');
+        : (current.status == '处理中' ? '已完成' : '已完成');
     try {
       await updateWorkOrder(widget.orderId, {'status': nextStatus});
       await _loadWorkOrder();
@@ -76,6 +77,9 @@ class _WorkOrderDetailScreenState extends State<WorkOrderDetailScreen> {
     }
   }
 
+  /// Returns [value] if non-empty, otherwise '-'.
+  static String _orDash(String value) => value.isEmpty ? '-' : value;
+
   @override
   Widget build(BuildContext context) {
     final workOrder = _workOrder;
@@ -87,7 +91,7 @@ class _WorkOrderDetailScreenState extends State<WorkOrderDetailScreen> {
     }
 
     Color statusColor;
-    switch (workOrder['status']) {
+    switch (workOrder.status) {
       case '待处理':
         statusColor = AppColors.warning;
         break;
@@ -124,7 +128,7 @@ class _WorkOrderDetailScreenState extends State<WorkOrderDetailScreen> {
                             children: [
                               Expanded(
                                 child: Text(
-                                  workOrder['id']?.toString() ?? '-',
+                                  _orDash(workOrder.id),
                                   style: const TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
@@ -141,7 +145,7 @@ class _WorkOrderDetailScreenState extends State<WorkOrderDetailScreen> {
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
-                                  workOrder['status']?.toString() ?? '-',
+                                  _orDash(workOrder.status),
                                   style: TextStyle(
                                     fontSize: 12,
                                     color: statusColor,
@@ -152,15 +156,15 @@ class _WorkOrderDetailScreenState extends State<WorkOrderDetailScreen> {
                             ],
                           ),
                           const SizedBox(height: 16),
-                          _buildInfoRow('标题', workOrder['title']?.toString() ?? '-'),
+                          _buildInfoRow('标题', _orDash(workOrder.title)),
                           const SizedBox(height: 8),
-                          _buildInfoRow('设备', workOrder['device']?.toString() ?? '-'),
+                          _buildInfoRow('设备', _orDash(workOrder.device)),
                           const SizedBox(height: 8),
-                          _buildInfoRow('部件', workOrder['component']?.toString() ?? '-'),
+                          _buildInfoRow('部件', _orDash(workOrder.component)),
                           const SizedBox(height: 8),
-                          _buildInfoRow('创建时间', workOrder['createdTime']?.toString() ?? '-'),
+                          _buildInfoRow('创建时间', _orDash(workOrder.createdTime)),
                           const SizedBox(height: 8),
-                          _buildInfoRow('描述', workOrder['description']?.toString() ?? '-'),
+                          _buildInfoRow('描述', _orDash(workOrder.description)),
                         ],
                       ),
                     ),
