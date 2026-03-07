@@ -63,6 +63,21 @@ def _normalize_timestamp(value: Optional[str]) -> str:
 
 
 def _ensure_schema_migrations(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS user_profiles (
+            username TEXT PRIMARY KEY,
+            display_name TEXT,
+            email TEXT,
+            phone TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE ON UPDATE CASCADE
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_user_profiles_email ON user_profiles(email)")
+
     realtime_columns = {
         row["name"] for row in conn.execute("PRAGMA table_info(realtime_events)").fetchall()
     }
@@ -104,6 +119,16 @@ def init_db() -> None:
                 is_active INTEGER NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS user_profiles (
+                username TEXT PRIMARY KEY,
+                display_name TEXT,
+                email TEXT,
+                phone TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE ON UPDATE CASCADE
             );
 
             CREATE TABLE IF NOT EXISTS devices (
@@ -272,6 +297,7 @@ def init_db() -> None:
 
             CREATE INDEX IF NOT EXISTS idx_alarms_status ON alarms(status);
             CREATE INDEX IF NOT EXISTS idx_work_orders_status ON work_orders(status);
+            CREATE INDEX IF NOT EXISTS idx_user_profiles_email ON user_profiles(email);
             CREATE INDEX IF NOT EXISTS idx_metric_snapshots_collected_at ON metric_snapshots(collected_at);
             CREATE INDEX IF NOT EXISTS idx_realtime_events_created_at ON realtime_events(created_at);
             CREATE INDEX IF NOT EXISTS idx_sensor_readings_device_time ON sensor_readings(device_id, reading_time DESC);
@@ -293,6 +319,17 @@ def _seed_if_needed(conn: sqlite3.Connection) -> None:
                 ("admin", "admin123", "admin"),
             ],
         )
+
+    conn.execute(
+        """
+        INSERT INTO user_profiles (username, display_name)
+        SELECT u.username, u.username
+        FROM users u
+        WHERE NOT EXISTS (
+            SELECT 1 FROM user_profiles p WHERE p.username = u.username
+        )
+        """
+    )
 
     devices_count = conn.execute("SELECT COUNT(1) AS cnt FROM devices").fetchone()["cnt"]
     if devices_count == 0:
@@ -1448,7 +1485,19 @@ def export_training_jsonl(output_path: Path) -> int:
 def get_user(username: str) -> Optional[dict[str, Any]]:
     with _get_conn() as conn:
         row = conn.execute(
-            "SELECT username, password_hash, role, is_active FROM users WHERE username = ?",
+            """
+            SELECT
+                u.username,
+                u.password_hash,
+                u.role,
+                u.is_active,
+                p.display_name,
+                p.email,
+                p.phone
+            FROM users u
+            LEFT JOIN user_profiles p ON p.username = u.username
+            WHERE u.username = ?
+            """,
             (username,),
         ).fetchone()
         if not row:
@@ -1458,7 +1507,40 @@ def get_user(username: str) -> Optional[dict[str, Any]]:
             "hashed_password": row["password_hash"],
             "role": row["role"],
             "is_active": bool(row["is_active"]),
+            "display_name": row["display_name"],
+            "email": row["email"],
+            "phone": row["phone"],
         }
+
+
+def create_user(
+    username: str,
+    hashed_password: str,
+    role: str = "operator",
+    display_name: Optional[str] = None,
+    email: Optional[str] = None,
+    phone: Optional[str] = None,
+) -> dict[str, Any]:
+    with _get_conn() as conn:
+        try:
+            conn.execute(
+                "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
+                (username, hashed_password, role),
+            )
+            conn.execute(
+                """
+                INSERT INTO user_profiles (username, display_name, email, phone)
+                VALUES (?, ?, ?, ?)
+                """,
+                (username, display_name, email, phone),
+            )
+        except sqlite3.IntegrityError as exc:
+            raise ValueError("user already exists") from exc
+
+    user = get_user(username)
+    if user is None:
+        raise RuntimeError("failed to create user")
+    return user
 
 
 init_db()

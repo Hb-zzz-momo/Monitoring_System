@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../routes/app_routes.dart';
+import '../services/api_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -25,11 +26,21 @@ class _SplashScreenState extends State<SplashScreen> {
       _hasError = false;
     });
 
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      await restoreAuthSession();
+      await Future.delayed(const Duration(milliseconds: 900));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _hasError = true;
+      });
+      return;
+    }
 
     if (mounted) {
-      // Simulate successful initialization
-      Navigator.of(context).pushReplacementNamed(AppRoutes.login);
+      final route = isLoggedIn ? AppRoutes.mainShell : AppRoutes.login;
+      Navigator.of(context).pushReplacementNamed(route);
     }
   }
 

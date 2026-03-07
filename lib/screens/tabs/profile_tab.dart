@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../../routes/app_routes.dart';
+import '../../services/api_service.dart';
 
 class ProfileTab extends StatefulWidget {
   final VoidCallback? onSwitchToDevices;
@@ -14,8 +15,39 @@ class ProfileTab extends StatefulWidget {
 class _ProfileTabState extends State<ProfileTab> {
   bool _notificationsEnabled = true;
 
+  String _firstChar(String text) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return 'U';
+    return trimmed.substring(0, 1).toUpperCase();
+  }
+
+  String _readUserText(dynamic value) {
+    return value?.toString().trim() ?? '';
+  }
+
+  Future<void> _logout() async {
+    await logout();
+    if (!mounted) return;
+    Navigator.of(context).pushNamedAndRemoveUntil(
+      AppRoutes.login,
+      (route) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final user = currentUser;
+    final username = _readUserText(user?['username']);
+    final role = _readUserText(user?['role']);
+    final displayName = _readUserText(user?['displayName']);
+    final email = _readUserText(user?['email']);
+    final title =
+        displayName.isNotEmpty ? displayName : (username.isNotEmpty ? username : '未登录用户');
+    final subtitle = email.isNotEmpty
+        ? email
+        : (username.isNotEmpty ? '账号: $username' : '请先登录');
+    final badge = role.isNotEmpty ? role : 'guest';
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('我的'),
@@ -36,10 +68,10 @@ class _ProfileTabState extends State<ProfileTab> {
                     color: AppColors.primary,
                     shape: BoxShape.circle,
                   ),
-                  child: const Center(
+                  child: Center(
                     child: Text(
-                      'D',
-                      style: TextStyle(
+                      _firstChar(title),
+                      style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
@@ -53,16 +85,24 @@ class _ProfileTabState extends State<ProfileTab> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Demo User',
-                        style: TextStyle(
+                      Text(
+                        title,
+                        style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'demo@example.com',
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.subText,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '角色: $badge',
                         style: TextStyle(
                           fontSize: 12,
                           color: AppColors.subText,
@@ -73,11 +113,8 @@ class _ProfileTabState extends State<ProfileTab> {
                 ),
                 // Logout button
                 OutlinedButton(
-                  onPressed: () {
-                    Navigator.of(context).pushNamedAndRemoveUntil(
-                      AppRoutes.login,
-                      (route) => false,
-                    );
+                  onPressed: () async {
+                    await _logout();
                   },
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(

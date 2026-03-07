@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 /// Base URL for the backend API server.
@@ -108,6 +109,107 @@ String _buildMetricsWsUrl({String? deviceId}) {
 
 /// Singleton API client instance shared across the app.
 final ApiClient apiClient = ApiClient();
+Map<String, dynamic>? _currentUser;
+
+const String _kAuthTokenKey = 'auth.token';
+const String _kAuthUsernameKey = 'auth.username';
+const String _kAuthRoleKey = 'auth.role';
+const String _kAuthDisplayNameKey = 'auth.display_name';
+const String _kAuthEmailKey = 'auth.email';
+const String _kAuthPhoneKey = 'auth.phone';
+
+Map<String, dynamic>? get currentUser => _currentUser;
+
+bool get isLoggedIn => apiClient.token != null && apiClient.token!.isNotEmpty;
+
+String? get currentUsername => _currentUser?['username']?.toString();
+
+void _setCurrentUserFromAuthPayload(Map<String, dynamic> data) {
+  _currentUser = {
+    'username': data['username'],
+    'role': data['role'],
+    'displayName': data['displayName'] ?? data['display_name'],
+    'email': data['email'],
+    'phone': data['phone'],
+  };
+}
+
+Future<void> _persistAuthSession() async {
+  final prefs = await SharedPreferences.getInstance();
+  final token = apiClient.token;
+  if (token == null || token.isEmpty) {
+    await prefs.remove(_kAuthTokenKey);
+  } else {
+    await prefs.setString(_kAuthTokenKey, token);
+  }
+
+  final user = _currentUser;
+  if (user == null) {
+    await prefs.remove(_kAuthUsernameKey);
+    await prefs.remove(_kAuthRoleKey);
+    await prefs.remove(_kAuthDisplayNameKey);
+    await prefs.remove(_kAuthEmailKey);
+    await prefs.remove(_kAuthPhoneKey);
+    return;
+  }
+
+  final username = user['username']?.toString();
+  final role = user['role']?.toString();
+  final displayName = user['displayName']?.toString();
+  final email = user['email']?.toString();
+  final phone = user['phone']?.toString();
+
+  if (username == null || username.isEmpty) {
+    await prefs.remove(_kAuthUsernameKey);
+  } else {
+    await prefs.setString(_kAuthUsernameKey, username);
+  }
+  if (role == null || role.isEmpty) {
+    await prefs.remove(_kAuthRoleKey);
+  } else {
+    await prefs.setString(_kAuthRoleKey, role);
+  }
+  if (displayName == null || displayName.isEmpty) {
+    await prefs.remove(_kAuthDisplayNameKey);
+  } else {
+    await prefs.setString(_kAuthDisplayNameKey, displayName);
+  }
+  if (email == null || email.isEmpty) {
+    await prefs.remove(_kAuthEmailKey);
+  } else {
+    await prefs.setString(_kAuthEmailKey, email);
+  }
+  if (phone == null || phone.isEmpty) {
+    await prefs.remove(_kAuthPhoneKey);
+  } else {
+    await prefs.setString(_kAuthPhoneKey, phone);
+  }
+}
+
+Future<void> restoreAuthSession() async {
+  final prefs = await SharedPreferences.getInstance();
+  final token = prefs.getString(_kAuthTokenKey);
+  if (token == null || token.isEmpty) {
+    apiClient.clearToken();
+    _currentUser = null;
+    return;
+  }
+
+  apiClient.setToken(token);
+  _currentUser = {
+    'username': prefs.getString(_kAuthUsernameKey),
+    'role': prefs.getString(_kAuthRoleKey),
+    'displayName': prefs.getString(_kAuthDisplayNameKey),
+    'email': prefs.getString(_kAuthEmailKey),
+    'phone': prefs.getString(_kAuthPhoneKey),
+  };
+}
+
+Future<void> logout() async {
+  apiClient.clearToken();
+  _currentUser = null;
+  await _persistAuthSession();
+}
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -118,6 +220,37 @@ Future<Map<String, dynamic>> login(String username, String password) async {
     'password': password,
   }) as Map<String, dynamic>;
   apiClient.setToken(data['token'] as String);
+  _setCurrentUserFromAuthPayload(data);
+  await _persistAuthSession();
+  return data;
+}
+
+/// Register and store the token in [apiClient]. Returns user info.
+Future<Map<String, dynamic>> register(
+  String username,
+  String password, {
+  String? displayName,
+  String? email,
+  String? phone,
+}) async {
+  final payload = <String, dynamic>{
+    'username': username,
+    'password': password,
+  };
+  if (displayName != null && displayName.trim().isNotEmpty) {
+    payload['displayName'] = displayName.trim();
+  }
+  if (email != null && email.trim().isNotEmpty) {
+    payload['email'] = email.trim();
+  }
+  if (phone != null && phone.trim().isNotEmpty) {
+    payload['phone'] = phone.trim();
+  }
+
+  final data = await apiClient.post('/auth/register', payload) as Map<String, dynamic>;
+  apiClient.setToken(data['token'] as String);
+  _setCurrentUserFromAuthPayload(data);
+  await _persistAuthSession();
   return data;
 }
 

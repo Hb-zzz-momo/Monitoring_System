@@ -56,14 +56,27 @@ uvicorn main:app
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
+| POST | `/auth/register` | 注册新用户（默认 `operator`）并返回 token |
 | POST | `/auth/login` | 登录，返回 token |
+
+注册请求示例：
+
+```json
+{
+	"username": "new_user",
+	"password": "your-password",
+	"displayName": "新用户",
+	"email": "new_user@example.com",
+	"phone": "13800000000"
+}
+```
 
 演示账号：
 - 用户名 `demo` / 密码 `demo123`（操作员）
 - 用户名 `admin` / 密码 `admin123`（管理员）
 
 鉴权规则：
-- 除 `/auth/login` 外，所有接口都需要 `Authorization: Bearer <token>`。
+- 除 `/auth/login` 与 `/auth/register` 外，所有接口都需要 `Authorization: Bearer <token>`。
 - 写操作（`PUT`/创建工单/训练管理）默认要求 `admin` 角色。
 
 ### 设备

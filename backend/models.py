@@ -1,5 +1,5 @@
 from typing import Optional, List
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
@@ -13,6 +13,23 @@ class LoginResponse(BaseModel):
     token: str
     username: str
     role: str
+
+
+class RegisterRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=50)
+    password: str = Field(min_length=6, max_length=128)
+    displayName: Optional[str] = Field(default=None, max_length=100)
+    email: Optional[str] = Field(default=None, max_length=255)
+    phone: Optional[str] = Field(default=None, max_length=30)
+
+
+class RegisterResponse(BaseModel):
+    token: str
+    username: str
+    role: str
+    displayName: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
 
 
 # ── Device ────────────────────────────────────────────────────────────────────

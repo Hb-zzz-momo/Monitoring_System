@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../screens/splash_screen.dart';
 import '../screens/login_screen.dart';
+import '../screens/register_screen.dart';
 import '../screens/device_list_screen.dart';
 import '../screens/device_detail_shell.dart';
 import '../screens/alarm_detail_screen.dart';
@@ -10,6 +11,7 @@ import '../screens/main_shell.dart';
 class AppRoutes {
   static const String splash = '/';
   static const String login = '/login';
+  static const String register = '/register';
   static const String deviceList = '/device-list';
   static const String mainShell = '/main';
   static const String deviceDetail = '/device-detail';
@@ -22,6 +24,8 @@ class AppRoutes {
         return MaterialPageRoute(builder: (_) => const SplashScreen());
       case login:
         return MaterialPageRoute(builder: (_) => const LoginScreen());
+      case register:
+        return MaterialPageRoute(builder: (_) => const RegisterScreen());
       case deviceList:
         return MaterialPageRoute(builder: (_) => const DeviceListScreen());
       case mainShell:

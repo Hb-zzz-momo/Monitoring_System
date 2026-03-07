@@ -174,6 +174,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed: _useDemoAccount,
                     child: const Text('使用演示账号'),
                   ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: _isLoading
+                        ? null
+                        : () => Navigator.of(context).pushNamed(AppRoutes.register),
+                    child: const Text('没有账号？立即注册'),
+                  ),
                   const SizedBox(height: 24),
                   // Network status
                   Row(

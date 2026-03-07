@@ -11,6 +11,16 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS user_profiles (
+    username TEXT PRIMARY KEY,
+    display_name TEXT,
+    email TEXT,
+    phone TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS devices (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -179,6 +189,7 @@ CREATE TABLE IF NOT EXISTS training_jobs (
 
 CREATE INDEX IF NOT EXISTS idx_alarms_status ON alarms(status);
 CREATE INDEX IF NOT EXISTS idx_work_orders_status ON work_orders(status);
+CREATE INDEX IF NOT EXISTS idx_user_profiles_email ON user_profiles(email);
 CREATE INDEX IF NOT EXISTS idx_metric_snapshots_collected_at ON metric_snapshots(collected_at);
 CREATE INDEX IF NOT EXISTS idx_realtime_events_created_at ON realtime_events(created_at);
 CREATE INDEX IF NOT EXISTS idx_realtime_events_device_time ON realtime_events(device_id, event_time DESC);
