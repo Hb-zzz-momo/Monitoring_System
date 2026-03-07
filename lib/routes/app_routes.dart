@@ -7,6 +7,7 @@ import '../screens/device_detail_shell.dart';
 import '../screens/alarm_detail_screen.dart';
 import '../screens/work_order_detail_screen.dart';
 import '../screens/main_shell.dart';
+import 'route_args.dart';
 
 class AppRoutes {
   static const String splash = '/';
@@ -35,22 +36,22 @@ class AppRoutes {
           builder: (_) => MainShell(initialIndex: initialIndex),
         );
       case deviceDetail:
-        final args = settings.arguments as Map<String, dynamic>;
+        final args = settings.arguments as DeviceDetailArgs;
         return MaterialPageRoute(
           builder: (_) => DeviceDetailShell(
-            deviceId: args['deviceId'],
-            deviceName: args['deviceName'],
+            deviceId: args.deviceId,
+            deviceName: args.deviceName,
           ),
         );
       case alarmDetail:
-        final args = settings.arguments as Map<String, dynamic>;
+        final args = settings.arguments as AlarmDetailArgs;
         return MaterialPageRoute(
-          builder: (_) => AlarmDetailScreen(alarmId: args['alarmId']),
+          builder: (_) => AlarmDetailScreen(alarmId: args.alarmId),
         );
       case workOrderDetail:
-        final args = settings.arguments as Map<String, dynamic>;
+        final args = settings.arguments as WorkOrderDetailArgs;
         return MaterialPageRoute(
-          builder: (_) => WorkOrderDetailScreen(orderId: args['orderId']),
+          builder: (_) => WorkOrderDetailScreen(orderId: args.orderId),
         );
       default:
         return MaterialPageRoute(

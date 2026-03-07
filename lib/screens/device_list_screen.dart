@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../components/common_widgets.dart';
 import '../routes/app_routes.dart';
+import '../routes/route_args.dart';
 import '../services/api_service.dart';
 
 class DeviceListScreen extends StatefulWidget {
@@ -206,7 +207,10 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
         onTap: () {
           Navigator.of(context).pushNamed(
             AppRoutes.deviceDetail,
-            arguments: {'deviceId': device['id'], 'deviceName': device['name']},
+            arguments: DeviceDetailArgs(
+              deviceId: device['id'].toString(),
+              deviceName: device['name'].toString(),
+            ),
           );
         },
         borderRadius: BorderRadius.circular(12),

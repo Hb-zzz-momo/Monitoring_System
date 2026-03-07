@@ -87,6 +87,9 @@ class AiService extends ChangeNotifier {
       final data = jsonDecode(response.body);
       return data['choices'][0]['message']['content'] as String;
     } else {
+      if (response.statusCode == 401 && _isUsingBackendProxy()) {
+        await handleUnauthorizedStatus();
+      }
       throw Exception('API 错误 ${response.statusCode}: ${response.body}');
     }
   }

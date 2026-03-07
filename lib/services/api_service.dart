@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+
+import 'session_storage.dart';
 
 /// Base URL for the backend API server.
 /// • Local development : http://localhost:8000
@@ -45,7 +47,7 @@ class ApiClient {
       Uri.parse('$baseUrl$path'),
       headers: _headers,
     );
-    return _handleResponse(response);
+    return await _handleResponse(response);
   }
 
   Future<dynamic> post(String path, Map<String, dynamic> body) async {
@@ -54,7 +56,7 @@ class ApiClient {
       headers: _headers,
       body: jsonEncode(body),
     );
-    return _handleResponse(response);
+    return await _handleResponse(response);
   }
 
   Future<dynamic> put(String path, Map<String, dynamic> body) async {
@@ -63,7 +65,7 @@ class ApiClient {
       headers: _headers,
       body: jsonEncode(body),
     );
-    return _handleResponse(response);
+    return await _handleResponse(response);
   }
 
   Future<dynamic> delete(String path) async {
@@ -71,14 +73,20 @@ class ApiClient {
       Uri.parse('$baseUrl$path'),
       headers: _headers,
     );
-    return _handleResponse(response);
+    return await _handleResponse(response);
   }
 
-  dynamic _handleResponse(http.Response response) {
+  Future<dynamic> _handleResponse(http.Response response) async {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       if (response.body.isEmpty) return null;
       return jsonDecode(utf8.decode(response.bodyBytes));
     }
+
+    if (response.statusCode == 401 && (_token?.isNotEmpty ?? false)) {
+      // Handle token expiration once in a centralized place.
+      unawaited(handleUnauthorizedStatus());
+    }
+
     String detail = response.body;
     try {
       final json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -110,19 +118,25 @@ String _buildMetricsWsUrl({String? deviceId}) {
 /// Singleton API client instance shared across the app.
 final ApiClient apiClient = ApiClient();
 Map<String, dynamic>? _currentUser;
-
-const String _kAuthTokenKey = 'auth.token';
-const String _kAuthUsernameKey = 'auth.username';
-const String _kAuthRoleKey = 'auth.role';
-const String _kAuthDisplayNameKey = 'auth.display_name';
-const String _kAuthEmailKey = 'auth.email';
-const String _kAuthPhoneKey = 'auth.phone';
+Future<void> Function()? _onUnauthorized;
+bool _isHandlingUnauthorized = false;
 
 Map<String, dynamic>? get currentUser => _currentUser;
 
 bool get isLoggedIn => apiClient.token != null && apiClient.token!.isNotEmpty;
 
 String? get currentUsername => _currentUser?['username']?.toString();
+
+void setUnauthorizedHandler(Future<void> Function()? handler) {
+  _onUnauthorized = handler;
+}
+
+Map<String, dynamic>? _normalizeUser(dynamic value) {
+  if (value is! Map) {
+    return null;
+  }
+  return value.map((key, val) => MapEntry(key.toString(), val));
+}
 
 void _setCurrentUserFromAuthPayload(Map<String, dynamic> data) {
   _currentUser = {
@@ -135,80 +149,59 @@ void _setCurrentUserFromAuthPayload(Map<String, dynamic> data) {
 }
 
 Future<void> _persistAuthSession() async {
-  final prefs = await SharedPreferences.getInstance();
   final token = apiClient.token;
   if (token == null || token.isEmpty) {
-    await prefs.remove(_kAuthTokenKey);
-  } else {
-    await prefs.setString(_kAuthTokenKey, token);
-  }
-
-  final user = _currentUser;
-  if (user == null) {
-    await prefs.remove(_kAuthUsernameKey);
-    await prefs.remove(_kAuthRoleKey);
-    await prefs.remove(_kAuthDisplayNameKey);
-    await prefs.remove(_kAuthEmailKey);
-    await prefs.remove(_kAuthPhoneKey);
+    await clearAuthSession();
     return;
   }
 
-  final username = user['username']?.toString();
-  final role = user['role']?.toString();
-  final displayName = user['displayName']?.toString();
-  final email = user['email']?.toString();
-  final phone = user['phone']?.toString();
-
-  if (username == null || username.isEmpty) {
-    await prefs.remove(_kAuthUsernameKey);
-  } else {
-    await prefs.setString(_kAuthUsernameKey, username);
-  }
-  if (role == null || role.isEmpty) {
-    await prefs.remove(_kAuthRoleKey);
-  } else {
-    await prefs.setString(_kAuthRoleKey, role);
-  }
-  if (displayName == null || displayName.isEmpty) {
-    await prefs.remove(_kAuthDisplayNameKey);
-  } else {
-    await prefs.setString(_kAuthDisplayNameKey, displayName);
-  }
-  if (email == null || email.isEmpty) {
-    await prefs.remove(_kAuthEmailKey);
-  } else {
-    await prefs.setString(_kAuthEmailKey, email);
-  }
-  if (phone == null || phone.isEmpty) {
-    await prefs.remove(_kAuthPhoneKey);
-  } else {
-    await prefs.setString(_kAuthPhoneKey, phone);
-  }
+  await writeAuthSession({
+    'token': token,
+    'user': _currentUser,
+  });
 }
 
 Future<void> restoreAuthSession() async {
-  final prefs = await SharedPreferences.getInstance();
-  final token = prefs.getString(_kAuthTokenKey);
-  if (token == null || token.isEmpty) {
+  final session = await readAuthSession();
+  if (session == null) {
     apiClient.clearToken();
     _currentUser = null;
     return;
   }
 
+  final token = session['token']?.toString() ?? '';
+  if (token.isEmpty) {
+    apiClient.clearToken();
+    _currentUser = null;
+    await clearAuthSession();
+    return;
+  }
+
   apiClient.setToken(token);
-  _currentUser = {
-    'username': prefs.getString(_kAuthUsernameKey),
-    'role': prefs.getString(_kAuthRoleKey),
-    'displayName': prefs.getString(_kAuthDisplayNameKey),
-    'email': prefs.getString(_kAuthEmailKey),
-    'phone': prefs.getString(_kAuthPhoneKey),
-  };
+  _currentUser = _normalizeUser(session['user']);
 }
 
 Future<void> logout() async {
   apiClient.clearToken();
   _currentUser = null;
-  await _persistAuthSession();
+  await clearAuthSession();
+}
+
+Future<void> handleUnauthorizedStatus() async {
+  if (_isHandlingUnauthorized) {
+    return;
+  }
+
+  _isHandlingUnauthorized = true;
+  try {
+    await logout();
+    final handler = _onUnauthorized;
+    if (handler != null) {
+      await handler();
+    }
+  } finally {
+    _isHandlingUnauthorized = false;
+  }
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────

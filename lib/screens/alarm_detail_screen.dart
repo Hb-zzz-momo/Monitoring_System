@@ -62,10 +62,10 @@ class _AlarmDetailScreenState extends State<AlarmDetailScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('工单已创建: ${workOrder['id']}')),
       );
-      Navigator.of(context).pushNamed(
-        AppRoutes.workOrderDetail,
-        arguments: {'orderId': workOrder['id']},
-      );
+        Navigator.of(context).pushNamed(
+          AppRoutes.workOrderDetail,
+          arguments: WorkOrderDetailArgs(orderId: workOrder['id'].toString()),
+        );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

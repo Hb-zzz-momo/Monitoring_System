@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'dart:math';
 import '../../theme/app_theme.dart';
 import '../../routes/app_routes.dart';
+import '../../routes/route_args.dart';
 import '../../components/common_widgets.dart';
 import '../../services/api_service.dart';
 
@@ -42,14 +42,26 @@ class _ThreeDDeviceContentState extends State<ThreeDDeviceContent> {
   Future<void> _loadData() async {
     setState(() => _state = PageState.loading);
     try {
-      final metrics = await fetchDeviceMetrics();
+      final metrics = await fetchDeviceMetrics(deviceId: widget.deviceId);
       final components = await fetchComponents();
       final alarms = await fetchAlarms();
+      final device = await fetchDevice(widget.deviceId);
+      final deviceName = device['name']?.toString() ?? '';
+
+      final filteredAlarms = alarms.where((alarm) {
+        final alarmDevice = alarm['device']?.toString() ?? '';
+        if (alarmDevice.isEmpty) {
+          return true;
+        }
+        return alarmDevice == widget.deviceId ||
+            (deviceName.isNotEmpty && alarmDevice == deviceName);
+      }).toList();
+
       if (!mounted) return;
       setState(() {
         _metrics = metrics;
         _components = components;
-        _alarms = alarms;
+        _alarms = filteredAlarms;
         _state = PageState.content;
       });
     } catch (_) {
@@ -191,11 +203,19 @@ class _ThreeDDeviceContentState extends State<ThreeDDeviceContent> {
   }
 
   void _onModuleTap(TapDownDetails details, BuildContext context) {
-    // 模拟点击不同部件
     final components = _components;
     if (components.isEmpty) return;
-    final random = Random();
-    final component = components[random.nextInt(components.length)];
+
+    final renderBox = context.findRenderObject() as RenderBox?;
+    if (renderBox == null || renderBox.size.width <= 0) {
+      return;
+    }
+
+    final localX = details.localPosition.dx.clamp(0, renderBox.size.width);
+    final ratio = localX / renderBox.size.width;
+    final index = (ratio * components.length).floor().clamp(0, components.length - 1);
+    final component = components[index];
+
     setState(() {
       _showDrawer = true;
       _selectedComponent = component;
@@ -272,7 +292,7 @@ class _ThreeDDeviceContentState extends State<ThreeDDeviceContent> {
                 onTap: () {
                   Navigator.of(context).pushNamed(
                     AppRoutes.alarmDetail,
-                    arguments: {'alarmId': alarm['id']},
+                    arguments: AlarmDetailArgs(alarmId: alarm['id'].toString()),
                   );
                 },
                 child: Padding(
