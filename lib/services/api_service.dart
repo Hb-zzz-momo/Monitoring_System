@@ -281,14 +281,38 @@ Future<Map<String, dynamic>> updateDevice(
 
 // ── Alarms ────────────────────────────────────────────────────────────────────
 
-Future<List<Map<String, dynamic>>> fetchAlarms() async {
+Future<List<Map<String, dynamic>>> fetchAlarms({
+  String? deviceId,
+  String? deviceName,
+}) async {
   final data = await apiClient.get('/alarms') as List<dynamic>;
-  return data.cast<Map<String, dynamic>>();
+  final alarms = data.cast<Map<String, dynamic>>();
+  if ((deviceId == null || deviceId.isEmpty) &&
+      (deviceName == null || deviceName.isEmpty)) {
+    return alarms;
+  }
+
+  return alarms.where((alarm) {
+    final device = alarm['device']?.toString() ?? '';
+    if (device.isEmpty) {
+      return true;
+    }
+    if (deviceId != null && deviceId.isNotEmpty && device == deviceId) {
+      return true;
+    }
+    if (deviceName != null && deviceName.isNotEmpty && device == deviceName) {
+      return true;
+    }
+    return false;
+  }).toList();
 }
 
 /// Typed wrapper: returns [AlarmModel] list.
-Future<List<AlarmModel>> fetchAlarmModels() async {
-  final raw = await fetchAlarms();
+Future<List<AlarmModel>> fetchAlarmModels({
+  String? deviceId,
+  String? deviceName,
+}) async {
+  final raw = await fetchAlarms(deviceId: deviceId, deviceName: deviceName);
   return raw.map(AlarmModel.fromJson).toList();
 }
 
@@ -453,9 +477,39 @@ Future<List<Map<String, double>>> fetchMetricHistory(
 
 // ── Components ────────────────────────────────────────────────────────────────
 
-Future<List<Map<String, dynamic>>> fetchComponents() async {
+Future<List<Map<String, dynamic>>> fetchComponents({
+  String? deviceId,
+  String? deviceName,
+}) async {
   final data = await apiClient.get('/components') as List<dynamic>;
-  return data.cast<Map<String, dynamic>>();
+  final components = data.cast<Map<String, dynamic>>();
+  if ((deviceId == null || deviceId.isEmpty) &&
+      (deviceName == null || deviceName.isEmpty)) {
+    return components;
+  }
+
+  final filtered = components.where((component) {
+    final componentDeviceId = component['deviceId']?.toString() ??
+        component['device_id']?.toString() ??
+        '';
+    final componentDeviceName = component['device']?.toString() ??
+        component['deviceName']?.toString() ??
+        component['device_name']?.toString() ??
+        '';
+    if (componentDeviceId.isEmpty && componentDeviceName.isEmpty) {
+      return false;
+    }
+    if (deviceId != null && deviceId.isNotEmpty && componentDeviceId == deviceId) {
+      return true;
+    }
+    if (deviceName != null && deviceName.isNotEmpty && componentDeviceName == deviceName) {
+      return true;
+    }
+    return false;
+  }).toList();
+
+  // Fallback for old backends that don't return device fields on components.
+  return filtered.isNotEmpty ? filtered : components;
 }
 
 Future<Map<String, dynamic>> fetchComponent(String id) async {

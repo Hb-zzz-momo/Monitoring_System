@@ -81,6 +81,7 @@ class AlarmCenterView extends StatefulWidget {
 class _AlarmCenterViewState extends State<AlarmCenterView> {
   String _selectedLevel = '全部';
   String _selectedStatus = '进行中';
+  String _searchQuery = '';
   PageState _state = PageState.loading;
   List<AlarmModel> _alarms = [];
 
@@ -141,6 +142,80 @@ class _AlarmCenterViewState extends State<AlarmCenterView> {
     }
   }
 
+  Future<void> _showAdvancedFilterDialog() async {
+    final level = _selectedLevel;
+    final status = _selectedStatus;
+    final result = await showModalBottomSheet<Map<String, String>>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        String tempLevel = level;
+        String tempStatus = status;
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            Widget buildSection(String title, List<String> values, String selected, void Function(String) onSelect) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: values.map((value) {
+                      final isSelected = selected == value;
+                      return ChoiceChip(
+                        label: Text(value),
+                        selected: isSelected,
+                        onSelected: (_) => setSheetState(() => onSelect(value)),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              );
+            }
+
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    buildSection('级别', const ['全部', '提示', '预警', '告警'], tempLevel,
+                        (value) => tempLevel = value),
+                    const SizedBox(height: 16),
+                    buildSection('状态', const ['全部', '进行中', '已处理'], tempStatus,
+                        (value) => tempStatus = value),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.of(context).pop({
+                            'level': tempLevel,
+                            'status': tempStatus,
+                          });
+                        },
+                        child: const Text('应用筛选'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (result == null || !mounted) return;
+    setState(() {
+      _selectedLevel = result['level'] ?? _selectedLevel;
+      _selectedStatus = result['status'] ?? _selectedStatus;
+    });
+  }
+
   List<AlarmModel> get _filteredAlarms {
     return _alarms.where((alarm) {
       if (_selectedLevel != '全部') {
@@ -153,6 +228,17 @@ class _AlarmCenterViewState extends State<AlarmCenterView> {
       }
       if (_selectedStatus != '全部' && alarm.status != _selectedStatus) {
         return false;
+      }
+      final query = _searchQuery.trim().toLowerCase();
+      if (query.isNotEmpty) {
+        final matched = alarm.id.toLowerCase().contains(query) ||
+            alarm.title.toLowerCase().contains(query) ||
+            alarm.device.toLowerCase().contains(query) ||
+            alarm.component.toLowerCase().contains(query) ||
+            alarm.description.toLowerCase().contains(query);
+        if (!matched) {
+          return false;
+        }
       }
       return true;
     }).toList();
@@ -218,8 +304,7 @@ class _AlarmCenterViewState extends State<AlarmCenterView> {
                   const Spacer(),
                   IconButton(
                     icon: const Icon(Icons.filter_list),
-                    // TODO(P2): 实现告警高级筛选
-                    onPressed: () {},
+                    onPressed: _showAdvancedFilterDialog,
                   ),
                 ],
               ),
@@ -428,6 +513,7 @@ class WorkOrdersView extends StatefulWidget {
 class _WorkOrdersViewState extends State<WorkOrdersView> {
   String _selectedStatus = '全部';
   String _selectedTime = '近24h';
+  String _searchQuery = '';
   PageState _state = PageState.loading;
   List<WorkOrderModel> _workOrders = [];
 
@@ -453,13 +539,52 @@ class _WorkOrdersViewState extends State<WorkOrdersView> {
     }
   }
 
+  Future<void> _showSearchDialog() async {
+    final controller = TextEditingController(text: _searchQuery);
+    final query = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('搜索工单'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: '输入工单号 / 标题 / 设备 / 负责人',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(''),
+            child: const Text('清空'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+            child: const Text('应用'),
+          ),
+        ],
+      ),
+    );
+
+    if (query == null || !mounted) return;
+    setState(() => _searchQuery = query);
+  }
+
   List<WorkOrderModel> get _filteredWorkOrders {
-    if (_selectedStatus == '全部') {
-      return _workOrders;
-    }
-    return _workOrders
-        .where((wo) => wo.status == _selectedStatus)
-        .toList();
+    return _workOrders.where((wo) {
+      if (_selectedStatus != '全部' && wo.status != _selectedStatus) {
+        return false;
+      }
+      final query = _searchQuery.trim().toLowerCase();
+      if (query.isEmpty) {
+        return true;
+      }
+      return wo.id.toLowerCase().contains(query) ||
+          wo.title.toLowerCase().contains(query) ||
+          wo.device.toLowerCase().contains(query) ||
+          wo.component.toLowerCase().contains(query) ||
+          wo.assignee.toLowerCase().contains(query);
+    }).toList();
   }
 
   @override
@@ -523,8 +648,7 @@ class _WorkOrdersViewState extends State<WorkOrdersView> {
                   const Spacer(),
                   IconButton(
                     icon: const Icon(Icons.search),
-                    // TODO(P2): 实现工单搜索功能
-                    onPressed: () {},
+                    onPressed: _showSearchDialog,
                   ),
                 ],
               ),

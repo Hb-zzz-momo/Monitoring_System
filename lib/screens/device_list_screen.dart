@@ -17,6 +17,7 @@ class DeviceListScreen extends StatefulWidget {
 class _DeviceListScreenState extends State<DeviceListScreen> {
   PageState _state = PageState.loading;
   String _selectedFilter = '全部';
+  String _searchQuery = '';
   List<DeviceModel> _devices = [];
 
   @override
@@ -42,17 +43,29 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
   }
 
   List<DeviceModel> get _filteredDevices {
-    if (_selectedFilter == '全部') return _devices;
-    if (_selectedFilter == '在线') {
-      return _devices.where((d) => d.isOnline).toList();
+    final baseList = _devices.where((d) {
+      if (_selectedFilter == '在线') {
+        return d.isOnline;
+      }
+      if (_selectedFilter == '离线') {
+        return !d.isOnline;
+      }
+      if (_selectedFilter == '告警中') {
+        return d.healthIndex < 0.7;
+      }
+      return true;
+    });
+
+    final query = _searchQuery.trim().toLowerCase();
+    if (query.isEmpty) {
+      return baseList.toList();
     }
-    if (_selectedFilter == '离线') {
-      return _devices.where((d) => !d.isOnline).toList();
-    }
-    if (_selectedFilter == '告警中') {
-      return _devices.where((d) => d.healthIndex < 0.7).toList();
-    }
-    return _devices;
+
+    return baseList.where((d) {
+      return d.id.toLowerCase().contains(query) ||
+          d.name.toLowerCase().contains(query) ||
+          d.component.toLowerCase().contains(query);
+    }).toList();
   }
 
   void _showScanDialog() {
@@ -105,15 +118,106 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('功能开发中...')),
-              );
+              _showManualBindDialog();
             },
             child: const Text('手动输入编号'),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _showManualBindDialog() async {
+    final controller = TextEditingController();
+    final deviceCode = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('手动输入设备编号'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: '例如：DEV-001',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+            child: const Text('确认'),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted || deviceCode == null || deviceCode.isEmpty) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已记录设备编号: $deviceCode，可继续完善绑定流程')),
+    );
+  }
+
+  Future<void> _showSearchDialog() async {
+    final controller = TextEditingController(text: _searchQuery);
+    final query = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('搜索设备'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: '输入设备名 / ID / 部件',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(''),
+            child: const Text('清空'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+            child: const Text('应用'),
+          ),
+        ],
+      ),
+    );
+
+    if (query == null || !mounted) return;
+    setState(() => _searchQuery = query);
+  }
+
+  Future<void> _showAdvancedFilterDialog() async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: ['全部', '在线', '离线', '告警中'].map((option) {
+            return ListTile(
+              leading: Icon(
+                _selectedFilter == option
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_off,
+                color: _selectedFilter == option ? AppColors.primary : AppColors.subText,
+              ),
+              title: Text(option),
+              onTap: () => Navigator.of(context).pop(option),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+
+    if (selected == null || !mounted) return;
+    setState(() => _selectedFilter = selected);
   }
 
   @override
@@ -135,13 +239,11 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
-            // TODO(P2): 实现设备搜索功能
-            onPressed: () {},
+            onPressed: _showSearchDialog,
           ),
           IconButton(
             icon: const Icon(Icons.filter_list),
-            // TODO(P2): 实现高级筛选弹窗
-            onPressed: () {},
+            onPressed: _showAdvancedFilterDialog,
           ),
         ],
       ),
