@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../../components/common_widgets.dart';
 import '../../services/api_service.dart';
+import '../../models/metrics_model.dart';
+import '../../models/realtime_event_model.dart';
 
 /// 监测总览 Tab 内容（嵌入 DeviceDetailShell）
 class RealtimeContent extends StatefulWidget {
@@ -21,16 +23,16 @@ class _RealtimeContentState extends State<RealtimeContent> {
   MetricsRealtimeConnection? _realtimeConnection;
   StreamSubscription<Map<String, dynamic>>? _realtimeSub;
   PageState _state = PageState.loading;
-  Map<String, dynamic> _metrics = const {
-    'temperature': 0.0,
-    'voltage': 0.0,
-    'current': 0.0,
-    'power': 0.0,
-    'energy': 0.0,
-    'delay': 0,
-    'isConnected': false,
-  };
-  List<Map<String, dynamic>> _events = [];
+  MetricsModel _metrics = const MetricsModel(
+    temperature: 0.0,
+    voltage: 0.0,
+    current: 0.0,
+    power: 0.0,
+    energy: 0.0,
+    delay: 0,
+    isConnected: false,
+  );
+  List<RealtimeEventModel> _events = [];
   List<Map<String, double>> _temperatureTrend = [];
 
   @override
@@ -50,8 +52,8 @@ class _RealtimeContentState extends State<RealtimeContent> {
   Future<void> _loadData() async {
     setState(() => _state = PageState.loading);
     try {
-      final metrics = await fetchDeviceMetrics(deviceId: widget.deviceId);
-      final events = await fetchRealtimeEvents(deviceId: widget.deviceId);
+      final metrics = await fetchDeviceMetricsModel(deviceId: widget.deviceId);
+      final events = await fetchRealtimeEventModels(deviceId: widget.deviceId);
       final trend =
           await fetchMetricHistory('temperature', points: 20, deviceId: widget.deviceId);
       if (!mounted) return;
@@ -78,14 +80,13 @@ class _RealtimeContentState extends State<RealtimeContent> {
         final trend = payload['trend'];
         setState(() {
           if (metrics is Map<String, dynamic>) {
-            _metrics = metrics;
+            _metrics = MetricsModel.fromJson(metrics);
           }
           if (events is List) {
             _events = events
                 .whereType<Map>()
-                .map((item) => item.map(
-                      (key, value) => MapEntry(key.toString(), value),
-                    ))
+                .map((item) => item.map((key, value) => MapEntry(key.toString(), value)))
+                .map(RealtimeEventModel.fromJson)
                 .toList();
           }
           if (trend is List) {
@@ -152,7 +153,7 @@ class _RealtimeContentState extends State<RealtimeContent> {
                     ),
                   ),
                   const SizedBox(width: 16),
-                  Text('延迟: ${_metrics['delay']} ms',
+                    Text('延迟: ${_metrics.delay} ms',
                       style: TextStyle(fontSize: 12, color: AppColors.subText)),
                 ],
               ),
@@ -188,12 +189,12 @@ class _RealtimeContentState extends State<RealtimeContent> {
                 Row(
                   children: [
                     Expanded(
-                        child: _buildGridKpiCard('电压', '${_metrics['voltage']}',
+                        child: _buildGridKpiCard('电压', '${_metrics.voltage}',
                           'V', Icons.bolt, AppColors.info),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                        child: _buildGridKpiCard('电流', '${_metrics['current']}',
+                        child: _buildGridKpiCard('电流', '${_metrics.current}',
                           'A', Icons.flash_on, AppColors.success),
                     ),
                   ],
@@ -202,12 +203,12 @@ class _RealtimeContentState extends State<RealtimeContent> {
                 Row(
                   children: [
                     Expanded(
-                        child: _buildGridKpiCard('功率', '${_metrics['power']}',
+                        child: _buildGridKpiCard('功率', '${_metrics.power}',
                           'kW', Icons.power, AppColors.primary),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                        child: _buildGridKpiCard('电能', '${_metrics['energy']}',
+                        child: _buildGridKpiCard('电能', '${_metrics.energy}',
                           'kWh', Icons.energy_savings_leaf, AppColors.warning),
                     ),
                   ],
@@ -250,7 +251,7 @@ class _RealtimeContentState extends State<RealtimeContent> {
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          Text('${_metrics['temperature']}',
+                            Text('${_metrics.temperature}',
                               style: TextStyle(
                                   fontSize: 36, fontWeight: FontWeight.bold, color: AppColors.warning)),
                           const SizedBox(width: 4),
@@ -354,20 +355,20 @@ class _RealtimeContentState extends State<RealtimeContent> {
                       width: 32,
                       height: 32,
                       decoration: BoxDecoration(
-                        color: _getEventColor(event['type']).withValues(alpha: 0.1),
+                        color: _getEventColor(event.type).withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Icon(_getEventIcon(event['icon']),
-                          size: 16, color: _getEventColor(event['type'])),
+                      child: Icon(_getEventIcon(event.icon),
+                          size: 16, color: _getEventColor(event.type)),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(event['text'],
+                          Text(event.text,
                               style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                          Text(event['time'],
+                          Text(event.time,
                               style: TextStyle(fontSize: 10, color: AppColors.subText)),
                         ],
                       ),

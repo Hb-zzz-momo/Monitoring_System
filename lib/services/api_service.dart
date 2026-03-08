@@ -8,6 +8,8 @@ import '../models/device_model.dart';
 import '../models/alarm_model.dart';
 import '../models/work_order_model.dart';
 import '../models/metrics_model.dart';
+import '../models/component_model.dart';
+import '../models/realtime_event_model.dart';
 
 /// Base URL for the backend API server.
 /// • Local development : http://localhost:8000
@@ -398,6 +400,11 @@ Future<List<Map<String, dynamic>>> fetchRealtimeEvents({String? deviceId}) async
   return data.cast<Map<String, dynamic>>();
 }
 
+Future<List<RealtimeEventModel>> fetchRealtimeEventModels({String? deviceId}) async {
+  final raw = await fetchRealtimeEvents(deviceId: deviceId);
+  return raw.map(RealtimeEventModel.fromJson).toList();
+}
+
 class MetricsRealtimeConnection {
   final WebSocketChannel _channel;
   final Stream<Map<String, dynamic>> stream;
@@ -512,8 +519,21 @@ Future<List<Map<String, dynamic>>> fetchComponents({
   return filtered.isNotEmpty ? filtered : components;
 }
 
+Future<List<ComponentModel>> fetchComponentModels({
+  String? deviceId,
+  String? deviceName,
+}) async {
+  final raw = await fetchComponents(deviceId: deviceId, deviceName: deviceName);
+  return raw.map(ComponentModel.fromJson).toList();
+}
+
 Future<Map<String, dynamic>> fetchComponent(String id) async {
   return await apiClient.get('/components/$id') as Map<String, dynamic>;
+}
+
+Future<ComponentModel> fetchComponentModel(String id) async {
+  final raw = await fetchComponent(id);
+  return ComponentModel.fromJson(raw);
 }
 
 // ── Sensors ───────────────────────────────────────────────────────────────────

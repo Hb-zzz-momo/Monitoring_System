@@ -7,6 +7,8 @@ import '../../components/common_widgets.dart';
 import '../../services/api_service.dart';
 import '../../models/alarm_model.dart';
 import '../../models/metrics_model.dart';
+import '../../models/component_model.dart';
+import 'widgets/sic_module_widget.dart';
 
 /// 3D视图 Tab 内容（嵌入 DeviceDetailShell）
 class ThreeDDeviceContent extends StatefulWidget {
@@ -25,7 +27,7 @@ class ThreeDDeviceContent extends StatefulWidget {
 
 class _ThreeDDeviceContentState extends State<ThreeDDeviceContent> {
   bool _showDrawer = false;
-  Map<String, dynamic>? _selectedComponent;
+  ComponentModel? _selectedComponent;
   PageState _state = PageState.loading;
   MetricsModel _metrics = const MetricsModel(
     temperature: 0.0,
@@ -33,7 +35,7 @@ class _ThreeDDeviceContentState extends State<ThreeDDeviceContent> {
     current: 0.0,
     power: 0.0,
   );
-  List<Map<String, dynamic>> _components = [];
+  List<ComponentModel> _components = [];
   List<AlarmModel> _alarms = [];
 
   @override
@@ -48,7 +50,7 @@ class _ThreeDDeviceContentState extends State<ThreeDDeviceContent> {
       final device = await fetchDevice(widget.deviceId);
       final deviceName = device['name']?.toString() ?? '';
       final metrics = await fetchDeviceMetricsModel(deviceId: widget.deviceId);
-      final components = await fetchComponents(
+      final components = await fetchComponentModels(
         deviceId: widget.deviceId,
         deviceName: deviceName,
       );
@@ -241,8 +243,8 @@ class _ThreeDDeviceContentState extends State<ThreeDDeviceContent> {
     _showTip('$action 功能已触发，后续可接入真实 3D 引擎动作');
   }
 
-  Future<void> _createWorkOrderFromComponent(Map<String, dynamic> component) async {
-    final componentName = component['name']?.toString() ?? '';
+  Future<void> _createWorkOrderFromComponent(ComponentModel component) async {
+    final componentName = component.name;
     final matched = _alarms.where((alarm) {
       if (alarm.status != '进行中') return false;
       if (componentName.isEmpty) return true;
@@ -389,8 +391,8 @@ class _ThreeDDeviceContentState extends State<ThreeDDeviceContent> {
     );
   }
 
-  Widget _buildDrawer(Map<String, dynamic> component) {
-    final hi = (component['healthIndex'] as double);
+  Widget _buildDrawer(ComponentModel component) {
+    final hi = component.healthIndex;
     final hiPercent = (hi * 100).toInt();
     final hiColor = hi >= 0.8
         ? AppColors.success
@@ -415,7 +417,7 @@ class _ThreeDDeviceContentState extends State<ThreeDDeviceContent> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(component['name'],
+                        Text(component.name,
                             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 4),
                         Row(
@@ -479,7 +481,7 @@ class _ThreeDDeviceContentState extends State<ThreeDDeviceContent> {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Text('${component['rul']}',
+                        Text('${component.rul}',
                             style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
                         const SizedBox(width: 4),
                         const Padding(
@@ -489,14 +491,14 @@ class _ThreeDDeviceContentState extends State<ThreeDDeviceContent> {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text('预测区间: ${component['rulRange']} 天',
+                    Text('预测区间: ${component.rulRange} 天',
                         style: TextStyle(fontSize: 12, color: AppColors.subText)),
                     const SizedBox(height: 24),
                     // 建议动作
                     const Text('建议动作',
                         style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 10),
-                    ...(component['suggestions'] as List).map((s) => Padding(
+                    ...component.suggestions.map((s) => Padding(
                           padding: const EdgeInsets.only(bottom: 8),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -512,13 +514,13 @@ class _ThreeDDeviceContentState extends State<ThreeDDeviceContent> {
                     const Text('相关测点',
                         style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 10),
-                    ...(component['metrics'] as List).map((m) => Padding(
+                    ...component.metrics.map((metric) => Padding(
                           padding: const EdgeInsets.only(bottom: 10),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(m['name'], style: const TextStyle(fontSize: 13)),
-                              Text('${m['value']} ${m['unit']}',
+                              Text(metric.name, style: const TextStyle(fontSize: 13)),
+                              Text('${metric.value} ${metric.unit}',
                                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
                             ],
                           ),
@@ -563,159 +565,3 @@ class _ThreeDDeviceContentState extends State<ThreeDDeviceContent> {
   }
 }
 
-/// 自绘 SiC/Si 混合功率模块 3D 渲染图
-class SiCModuleWidget extends StatelessWidget {
-  const SiCModuleWidget({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 340,
-      height: 220,
-      child: CustomPaint(painter: _SiCModulePainter()),
-    );
-  }
-}
-
-class _SiCModulePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-
-    // 底座阴影
-    final shadowPaint = Paint()
-      ..color = Colors.black.withOpacity(0.15)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-          Rect.fromLTWH(w * 0.08, h * 0.2, w * 0.88, h * 0.7), const Radius.circular(6)),
-      shadowPaint,
-    );
-
-    // 模块主体（白色壳体）
-    final bodyRect = Rect.fromLTWH(w * 0.08, h * 0.15, w * 0.84, h * 0.65);
-    final bodyPaint = Paint()
-      ..shader = const LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [Color(0xFFF5F5F0), Color(0xFFE8E6E0), Color(0xFFD8D6D0)],
-      ).createShader(bodyRect);
-    canvas.drawRRect(
-        RRect.fromRectAndRadius(bodyRect, const Radius.circular(6)), bodyPaint);
-
-    // 壳体边框
-    final borderPaint = Paint()
-      ..color = const Color(0xFFB0AEA8)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-    canvas.drawRRect(
-        RRect.fromRectAndRadius(bodyRect, const Radius.circular(6)), borderPaint);
-
-    // 顶部透明盖（半透明效果）
-    final coverRect = Rect.fromLTWH(w * 0.14, h * 0.22, w * 0.72, h * 0.35);
-    final coverPaint = Paint()
-      ..shader = const LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [Color(0x40FFFFFF), Color(0x20B0D0F0), Color(0x30FFFFFF)],
-      ).createShader(coverRect);
-    canvas.drawRRect(
-        RRect.fromRectAndRadius(coverRect, const Radius.circular(3)), coverPaint);
-    final coverBorder = Paint()
-      ..color = const Color(0x60909090)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
-    canvas.drawRRect(
-        RRect.fromRectAndRadius(coverRect, const Radius.circular(3)), coverBorder);
-
-    // 芯片（SiC 和 Si）
-    final chipPaint = Paint()..color = const Color(0xFF2D2D3D);
-    final goldPaint = Paint()
-      ..color = const Color(0xFFD4AF37)
-      ..strokeWidth = 0.8;
-
-    // 左侧芯片组
-    for (int i = 0; i < 3; i++) {
-      final cx = w * 0.22 + i * w * 0.08;
-      final cy = h * 0.32;
-      canvas.drawRect(Rect.fromCenter(center: Offset(cx, cy), width: 18, height: 14), chipPaint);
-      // 金色引线
-      canvas.drawLine(Offset(cx, cy - 7), Offset(cx, cy - 14), goldPaint);
-      canvas.drawLine(Offset(cx, cy + 7), Offset(cx, cy + 14), goldPaint);
-    }
-
-    // 右侧芯片组
-    for (int i = 0; i < 3; i++) {
-      final cx = w * 0.58 + i * w * 0.08;
-      final cy = h * 0.32;
-      canvas.drawRect(Rect.fromCenter(center: Offset(cx, cy), width: 18, height: 14), chipPaint);
-      canvas.drawLine(Offset(cx, cy - 7), Offset(cx, cy - 14), goldPaint);
-      canvas.drawLine(Offset(cx, cy + 7), Offset(cx, cy + 14), goldPaint);
-    }
-
-    // 中间 DBC 基板
-    final dbcPaint = Paint()..color = const Color(0xFFC0B8A0);
-    canvas.drawRect(
-        Rect.fromLTWH(w * 0.16, h * 0.44, w * 0.68, h * 0.1), dbcPaint);
-
-    // 螺丝安装孔（四角）
-    final holePaint = Paint()..color = const Color(0xFF606060);
-    final holeStroke = Paint()
-      ..color = const Color(0xFF808080)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-
-    final holes = [
-      Offset(w * 0.13, h * 0.22),
-      Offset(w * 0.87, h * 0.22),
-      Offset(w * 0.13, h * 0.72),
-      Offset(w * 0.87, h * 0.72),
-    ];
-    for (final pos in holes) {
-      canvas.drawCircle(pos, 8, holePaint);
-      canvas.drawCircle(pos, 8, holeStroke);
-      canvas.drawCircle(pos, 3, Paint()..color = const Color(0xFF404040));
-    }
-
-    // 顶部引脚（电极端子）
-    final pinPaint = Paint()..color = const Color(0xFFB0B0B0);
-    final pinHighlight = Paint()..color = const Color(0xFFD0D0D0);
-    for (int i = 0; i < 4; i++) {
-      final px = w * 0.25 + i * w * 0.17;
-      final pinRect = Rect.fromLTWH(px - 8, h * 0.02, 16, h * 0.15);
-      canvas.drawRRect(
-          RRect.fromRectAndRadius(pinRect, const Radius.circular(2)), pinPaint);
-      canvas.drawRRect(
-          RRect.fromRectAndRadius(
-              Rect.fromLTWH(px - 6, h * 0.03, 4, h * 0.13), const Radius.circular(1)),
-          pinHighlight);
-    }
-
-    // 底部引脚
-    for (int i = 0; i < 4; i++) {
-      final px = w * 0.25 + i * w * 0.17;
-      final pinRect = Rect.fromLTWH(px - 8, h * 0.82, 16, h * 0.15);
-      canvas.drawRRect(
-          RRect.fromRectAndRadius(pinRect, const Radius.circular(2)), pinPaint);
-      canvas.drawRRect(
-          RRect.fromRectAndRadius(
-              Rect.fromLTWH(px - 6, h * 0.83, 4, h * 0.13), const Radius.circular(1)),
-          pinHighlight);
-    }
-
-    // 标签文字
-    final textPainter = TextPainter(
-      text: const TextSpan(
-        text: 'SiC/Si Power Module',
-        style: TextStyle(color: Color(0xFF606060), fontSize: 9),
-      ),
-      textDirection: TextDirection.ltr,
-    );
-    textPainter.layout();
-    textPainter.paint(canvas, Offset(w * 0.3, h * 0.62));
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
